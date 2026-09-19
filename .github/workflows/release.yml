@@ -21,7 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
       - name: Check the tag matches package.json
         run: |
           VERSION=$(node -p "require('./package.json').version")
@@ -38,10 +37,12 @@ jobs:
         run: |
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then TAG=next; else TAG=latest; fi
           if [ -n "$NPM_TOKEN" ]; then
-            export NODE_AUTH_TOKEN="$NPM_TOKEN"
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+            echo "Publishing with the NPM_TOKEN secret"
           else
-            unset NODE_AUTH_TOKEN
+            echo "Publishing with npm Trusted Publishing (OIDC)"
           fi
+          npm --version
           npm publish --access public --provenance --tag "$TAG"
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
