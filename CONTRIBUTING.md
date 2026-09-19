@@ -56,8 +56,16 @@ Releases are cut by maintainers and published to npm automatically from a git ta
    creates the GitHub release. Versions with a suffix (for example `-beta.1`) are published under the
    `next` dist-tag and marked as pre-releases; everything else goes to `latest`.
 
-Repository setup (once): add an npm automation token as the `NPM_TOKEN` Actions secret, and make sure
-the `@klixsoft` scope exists on npm and the token can publish to it.
+Repository setup (once), one of:
+
+- **Token (needed for the very first publish of a package):** create a granular npm access token with
+  read and write access to the `@klixsoft` scope that is allowed to bypass two-factor authentication for
+  publishing, and add it as the `NPM_TOKEN` Actions secret.
+- **Trusted Publishing (no secret):** once the package exists on npm, open its Settings, then
+  Trusted Publisher, choose GitHub Actions, and enter the repository owner, the repository name and the
+  workflow file `release.yml`. The workflow then publishes without any secret; delete `NPM_TOKEN`.
+
+The repository must be public for npm provenance to work.
 
 ### Versioning
 

@@ -32,12 +32,19 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Update npm
+        run: npm install -g npm@latest
       - name: Publish
         run: |
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then TAG=next; else TAG=latest; fi
+          if [ -n "$NPM_TOKEN" ]; then
+            export NODE_AUTH_TOKEN="$NPM_TOKEN"
+          else
+            unset NODE_AUTH_TOKEN
+          fi
           npm publish --access public --provenance --tag "$TAG"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create GitHub release
         run: |
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then FLAGS=--prerelease; else FLAGS=; fi
