@@ -1,6 +1,6 @@
 {
   "name": "@klixsoft/react-native-khalti",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Khalti Payment Gateway (KPG-2) for React Native: a native wrapper around the official Khalti Checkout SDKs for Android and iOS.",
   "main": "src/index.tsx",
   "types": "src/index.tsx",
