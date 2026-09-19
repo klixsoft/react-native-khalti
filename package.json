@@ -1,0 +1,58 @@
+{
+  "name": "@klixsoft/react-native-khalti",
+  "version": "0.1.0",
+  "description": "Khalti Payment Gateway (KPG-2) for React Native: a native wrapper around the official Khalti Checkout SDKs for Android and iOS.",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "react-native": "src/index.tsx",
+  "source": "src/index.tsx",
+  "files": [
+    "src",
+    "android",
+    "ios",
+    "docs",
+    "RNKlixsoftKhalti.podspec",
+    "!android/build",
+    "!**/__tests__"
+  ],
+  "keywords": [
+    "react-native",
+    "khalti",
+    "payment",
+    "payment-gateway",
+    "nepal",
+    "kpg",
+    "checkout",
+    "ios",
+    "android",
+    "turbomodule"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klixsoft/react-native-khalti.git"
+  },
+  "bugs": {
+    "url": "https://github.com/klixsoft/react-native-khalti/issues"
+  },
+  "homepage": "https://github.com/klixsoft/react-native-khalti#readme",
+  "author": "Klixsoft",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.76.0"
+  },
+  "codegenConfig": {
+    "name": "RNKlixsoftKhaltiSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.klixsoft.khalti"
+    }
+  }
+}
