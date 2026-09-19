@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.0-beta.1] - 2026-09-19
 
 ### Added
+- README: Mermaid flow, state and per-gateway diagrams, an outcomes table, the exact server endpoints to build, and a list of common mistakes.
 - `processKhaltiPayment`, `useKhaltiPayment` and `createKhaltiFlow`: `initiate`, open the Khalti checkout, `verify`.
 - `onSuccess`, `onCancel` and `onError` callbacks on every flow; `verify` is optional where the gateway SDK reports a trustworthy result.
 - Strict typing: results are a discriminated union on `outcome`; every failure is a `PaymentFlowError` with `code`, `step` and `cause`; `is...Error` guards and `get...Error` cause extractors; compile-time type tests.

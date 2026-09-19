@@ -27,6 +27,7 @@ Accept [Khalti](https://khalti.com) payments (KPG-2) in React Native with the **
 - [Usage](#usage)
 - [Server contract](#server-contract)
 - [API](#api)
+- [Common mistakes](#common-mistakes)
 - [Errors](#errors)
 - [Security](#security)
 - [Documentation](#documentation)
@@ -61,14 +62,31 @@ No manual step: Gradle resolves `com.khalti:checkout-android` from Maven Central
 
 Every Klixsoft payment package follows the same three-step lifecycle, so switching gateways does not change how your code is shaped:
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Your app
+    participant Pkg as react-native-khalti
+    participant Srv as Your server
+    participant K as Khalti
+
+    App->>Pkg: start()
+    Pkg->>Srv: initiate()
+    Srv->>K: epayment/initiate with the secret key
+    K-->>Srv: pidx and payment_url
+    Srv-->>Pkg: publicKey, pidx, paymentUrl, environment
+    Pkg->>K: open the official Khalti checkout
+    K-->>Pkg: user finished or closed it
+    loop until success, failed or timeout
+        Pkg->>Srv: verify()
+        Srv->>K: epayment/lookup with the pidx
+        K-->>Srv: payment status
+        Srv-->>Pkg: success, failed or pending
+    end
+    Pkg-->>App: onSuccess, onCancel or onError
 ```
-  Your app                     Your server                       Khalti
-     |  1. initiate()  ------>   |  create the payment  --------->  |
-     |  <----- what Khalti needs - |  <-------------------------------|
-     |  2. present  (open the Khalti checkout)                                |
-     |  3. verify()    ------>   |  ask Khalti for the real status -> |
-     |  <----- success | failed | pending                          |
-```
+
+> Diagrams are [Mermaid](https://mermaid.js.org). GitHub renders them; on npmjs.com they show as code, so read this README on GitHub for the pictures.
 
 | Step | You provide | The package does |
 | --- | --- | --- |
@@ -76,11 +94,58 @@ Every Klixsoft payment package follows the same three-step lifecycle, so switchi
 | **present** | Nothing. | Opens the **official Khalti Checkout SDK** (Android and iOS), not a WebView, and resolves when the user finishes or closes it. |
 | **verify** | A function that calls **your server**, which asks Khalti's status API and returns `success`, `failed` or `pending`. | Polls it until the payment settles, times out or is cancelled. |
 
-The result of `present` is never treated as proof of payment. Only `verify` decides the outcome, and it should always be answered by your server from Khalti's own API.
+The result of `present` is not proof of payment. `verify` decides the outcome, and it should be answered by your server from Khalti's own API. (If you leave `verify` out, the flow falls back to the result the Khalti SDK reports on the device; see below.)
 
 ### Do I need `verify`?
 
 Strongly recommended. Khalti's SDK reports its own result on the device, but a device is not a trusted place to decide that someone paid: `verify` lets **your server** confirm it with Khalti's API and check the amount before you grant anything. If you leave `verify` out, the flow trusts the result reported by the Khalti SDK and `onSuccess` fires from that, so only do this for low-value purchases or when your server confirms through a webhook instead.
+
+### The Khalti flow at a glance
+
+```mermaid
+flowchart TD
+    A["start()"] --> B["initiate: your server calls Khalti epayment/initiate"]
+    B --> C["Open the official Khalti checkout with pidx and publicKey"]
+    C --> D{"How did the user leave?"}
+    D -->|"closed it"| X["cancelled: onCancel"]
+    D -->|"finished it"| V["verify: your server calls epayment/lookup"]
+    V --> S{"Server answer"}
+    S -->|"success"| OK["success: onSuccess"]
+    S -->|"failed"| ER["failed: onError"]
+    S -->|"pending too long"| TO["timeout: onError"]
+```
+
+### Outcomes and states
+
+While a payment runs, `status` moves through these states, and it always ends in exactly one outcome:
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> initiating: start()
+    initiating --> presenting: initiate resolved
+    initiating --> failed: initiate threw
+    presenting --> verifying: gateway returned
+    presenting --> cancelled: user backed out
+    presenting --> failed: gateway error
+    verifying --> success: verify returned success
+    verifying --> failed: verify returned failed
+    verifying --> timeout: still pending at timeoutMs
+    verifying --> cancelled: aborted through signal
+    success --> [*]
+    failed --> [*]
+    cancelled --> [*]
+    timeout --> [*]
+```
+
+| Outcome | Meaning | Callback | What to show the user |
+| --- | --- | --- | --- |
+| `success` | Your server confirmed the payment. | `onSuccess` | The receipt or unlocked content. |
+| `failed` | The payment failed, `initiate` threw, or the gateway reported an error. `error.code` says which. | `onError` | An error and a "Try again" button. |
+| `cancelled` | The user backed out, or you aborted through `signal`. | `onCancel` | Nothing, or a neutral "Payment cancelled". |
+| `timeout` | Still `pending` when `timeoutMs` ran out. **The payment may still complete**, so do not tell the user they were not charged. | `onError` (`E_TIMEOUT`) | "We are still confirming your payment", and check the order status later. |
+
+`success` is only ever produced by your server (`verify`), except for Khalti without a `verify` (see below).
 
 ## Quick start
 
@@ -183,6 +248,15 @@ The same helpers are exported by all three Klixsoft payment packages, so you can
 
 ## Server contract
 
+Your server needs to expose these endpoints (the names are examples, use your own routes):
+
+| Endpoint on your server | Called by | What it must do |
+| --- | --- | --- |
+| `POST /orders/:id/khalti` | `initiate` | Create the order's Khalti payment (`epayment/initiate`, secret key, amount in paisa) and return `{ publicKey, pidx, paymentUrl, environment }`. |
+| `GET /orders/:id/status` | `verify` | Call `epayment/lookup` with the stored `pidx`. Return `success` only for status `Completed` and the expected amount, `failed` for `Expired`, `User canceled` or refunded, otherwise `pending`. |
+| `POST /webhooks/khalti` (optional) | Khalti | Not required. Only useful to update the order when the app never comes back. |
+
+
 `initiate` must return what the Khalti SDK needs. Your server creates the payment with Khalti's `epayment/initiate` API using the **secret key** and returns:
 
 ```json
@@ -204,6 +278,15 @@ The same helpers are exported by all three Klixsoft payment packages, so you can
 | `KhaltiError`, `KhaltiErrorCode` | Typed errors. |
 
 Full signatures and options are in the [API reference](docs/api-reference.md).
+
+## Common mistakes
+
+- **Putting the secret key in the app.** Only the public key ever reaches the device.
+- **Trusting `pay()` or `onSuccess` without a `verify`.** Without `verify`, success comes from the SDK on the device. Your server should confirm high-value orders.
+- **Sending the amount in rupees.** Khalti amounts are in paisa (Rs. 100 = 10000).
+- **Reusing a `pidx`.** Each attempt needs a fresh `initiate`, so calling `start()` again creates a new payment.
+- **Forgetting `environment`.** It must be `test` for the sandbox and `production` for live, matching the keys you return.
+- **Not rebuilding the native app** after installing. `E_NOT_LINKED` means the native module is missing.
 
 ## Errors
 
