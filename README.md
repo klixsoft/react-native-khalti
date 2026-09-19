@@ -78,27 +78,25 @@ Every Klixsoft payment package follows the same three-step lifecycle, so switchi
 
 The result of `present` is never treated as proof of payment. Only `verify` decides the outcome, and it should always be answered by your server from Khalti's own API.
 
+### Do I need `verify`?
+
+Strongly recommended. Khalti's SDK reports its own result on the device, but a device is not a trusted place to decide that someone paid: `verify` lets **your server** confirm it with Khalti's API and check the amount before you grant anything. If you leave `verify` out, the flow trusts the result reported by the Khalti SDK and `onSuccess` fires from that, so only do this for low-value purchases or when your server confirms through a webhook instead.
+
 ## Quick start
 
 ```tsx
 import { useKhaltiPayment } from '@klixsoft/react-native-khalti';
 
 function PayButton({ orderId }: { orderId: string }) {
-  const { start, status, isProcessing } = useKhaltiPayment({
+  const { start, isProcessing } = useKhaltiPayment({
     initiate: () => api.post(`/orders/${orderId}/khalti`),
     verify: async () => (await api.get(`/orders/${orderId}/status`)).status,
+    onSuccess: () => navigation.replace('Receipt'),
+    onCancel: () => Toast.show('Payment cancelled'),
+    onError: (error) => Toast.show(error instanceof Error ? error.message : 'Payment failed'),
   });
 
-  return (
-    <Button
-      title={isProcessing ? status : 'Pay with Khalti'}
-      disabled={isProcessing}
-      onPress={async () => {
-        const result = await start();
-        if (result?.outcome === 'success') navigation.replace('Receipt');
-      }}
-    />
-  );
+  return <Button title="Pay with Khalti" disabled={isProcessing} onPress={start} />;
 }
 ```
 
@@ -124,6 +122,22 @@ const { outcome } = await processKhaltiPayment({
 
 `useKhaltiPayment(options)` returns `{ start, cancel, reset, status, isProcessing, error }`. `start()` never throws: failures are put in `error` and `status` becomes `failed`.
 
+### Callbacks
+
+Instead of reading the result, you can react to the outcome:
+
+```ts
+processKhaltiPayment({
+  initiate,
+  verify,
+  onSuccess: (initiation) => navigation.replace('Receipt'),
+  onCancel: () => showToast('Payment cancelled'),
+  onError: (error) => showToast(error instanceof Error ? error.message : 'Payment failed'),
+});
+```
+
+Each callback is called at most once per payment. `onError` receives a `PaymentFlowError` (`E_PAYMENT_FAILED` or `E_TIMEOUT`) when the server reports a failure or the payment never settles, or the original error when a step throws.
+
 ### Low level
 
 ```ts
@@ -144,11 +158,14 @@ try {
 | Option | Default | Notes |
 | --- | --- | --- |
 | `initiate` | required | Returns `KhaltiPayOptions`: `publicKey`, `pidx`, `paymentUrl?`, `environment?`, `openInKhalti?`. |
-| `verify` | required | Returns `'success' \| 'failed' \| 'pending'`. |
+| `verify` | recommended | Returns `'success' \| 'failed' \| 'pending'`. Optional; see [Do I need `verify`?](#do-i-need-verify). |
 | `intervalMs` | `3000` | Delay between `verify` calls. |
 | `timeoutMs` | `120000` | How long to wait for a final state. |
 | `maxVerifyErrors` | `3` | Consecutive `verify` failures tolerated before the flow rejects. |
 | `signal` | none | `{ aborted: boolean }`; set `aborted = true` to stop. |
+| `onSuccess` | none | Called once, with what `initiate` returned, when the payment succeeded. |
+| `onCancel` | none | Called once when the user backed out or stopped waiting. |
+| `onError` | none | Called once when the payment failed or timed out (a `PaymentFlowError`) or a step threw. When set, thrown errors no longer reject: the flow resolves `failed` with `result.error`. |
 | `onStatus` | none | Called on every step change. |
 
 ### Generic building blocks
@@ -190,7 +207,7 @@ Full signatures and options are in the [API reference](docs/api-reference.md).
 
 ## Errors
 
-`KhaltiError.code` is one of `E_CANCELLED`, `E_NETWORK`, `E_LOOKUP_FAILED`, `E_RETURN_URL`, `E_IN_PROGRESS`, `E_NO_PRESENTER`, `E_INVALID_ARGUMENTS`, `E_NOT_LINKED`, `E_UNKNOWN`. `error.isCancelled` is true for `E_CANCELLED`. The generic flow raises `PaymentFlowError` with `E_TIMEOUT`, `E_ABORTED` or `E_VERIFY_FAILED`.
+`KhaltiError.code` is one of `E_CANCELLED`, `E_NETWORK`, `E_LOOKUP_FAILED`, `E_RETURN_URL`, `E_IN_PROGRESS`, `E_NO_PRESENTER`, `E_INVALID_ARGUMENTS`, `E_NOT_LINKED`, `E_UNKNOWN`. `error.isCancelled` is true for `E_CANCELLED`. The generic flow raises `PaymentFlowError` with `E_TIMEOUT`, `E_ABORTED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED` or `E_NO_VERIFY`.
 
 ## Security
 

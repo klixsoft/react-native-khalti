@@ -49,7 +49,7 @@ export function usePaymentFlow<TInitiation>(
     setError(null);
 
     try {
-      return await runPaymentFlow({
+      const result = await runPaymentFlow({
         ...latest.current,
         signal: current,
         onStatus: (next) => {
@@ -57,6 +57,8 @@ export function usePaymentFlow<TInitiation>(
           latest.current.onStatus?.(next);
         },
       });
+      if (result.error && mounted.current) setError(result.error);
+      return result;
     } catch (caught) {
       if (mounted.current) {
         setError(caught);

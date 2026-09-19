@@ -20,13 +20,16 @@ type PaymentStatus = 'idle' | 'initiating' | 'presenting' | 'verifying' | Paymen
 | --- | --- | --- |
 | `initiate` | `() => Promise<T>` | Ask your server to create the payment. |
 | `present` | `(initiation: T) => Promise<unknown>` | Hand it to the gateway. |
-| `verify` | `() => Promise<PaymentState>` | Ask your server for the real state. |
+| `verify` | `() => Promise<PaymentState>` | Ask your server for the real state. Optional: without it the flow uses the `PaymentState` returned by `present`, and raises `E_NO_VERIFY` if there is none. |
 | `isCancelled` | `(error) => boolean` | Marks a `present` error as "user backed out" so the flow ends `cancelled`. |
 | `intervalMs` | `number` | Poll delay. Default 3000. |
 | `timeoutMs` | `number` | Give up waiting after this long. Default 120000. |
 | `maxVerifyErrors` | `number` | Consecutive `verify` failures before the flow rejects. Default 3. |
 | `signal` | `{ aborted: boolean }` | Set `aborted = true` to stop; the flow ends `cancelled`. |
 | `onStatus` | `(status) => void` | Called on every step change. |
+| `onSuccess` | `(initiation) => void` | Called once when the payment succeeded. |
+| `onCancel` | `(initiation?) => void` | Called once when the user backed out or stopped waiting. |
+| `onError` | `(error, initiation?) => void` | Called once on failure or timeout (a `PaymentFlowError`) or when a step threw. When set, thrown errors resolve `failed` with `result.error` instead of rejecting. |
 
 Errors from `initiate` and non-cancel errors from `present` reject. A server `failed` resolves `failed`; a payment still pending at `timeoutMs` resolves `timeout`.
 
@@ -40,7 +43,7 @@ Calls `check` every `intervalMs` until it returns `success` or `failed`. Rejects
 
 ### `PaymentFlowError`
 
-`code` is `E_TIMEOUT`, `E_ABORTED` or `E_VERIFY_FAILED`.
+`code` is `E_TIMEOUT`, `E_ABORTED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED` or `E_NO_VERIFY`.
 
 ```ts
 import KhaltiDefault, { pay, cancel, isAvailable, KhaltiError, KhaltiErrorCode } from '@klixsoft/react-native-khalti';

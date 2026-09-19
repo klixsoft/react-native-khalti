@@ -86,3 +86,52 @@ test('an aborted signal resolves cancelled', async () => {
   const { options } = base({ signal });
   assert.equal((await runPaymentFlow(options)).outcome, 'cancelled');
 });
+
+test('callbacks: onSuccess once with the initiation, onCancel and onError for the other outcomes', async () => {
+  const seen = [];
+  const handlers = {
+    onSuccess: (init) => seen.push(['success', init.id]),
+    onCancel: () => seen.push(['cancel']),
+    onError: (error) => seen.push(['error', error.code ?? error.message]),
+  };
+
+  await runPaymentFlow(base(handlers).options);
+  await runPaymentFlow(base({ ...handlers, verify: async () => 'failed' }).options);
+  await runPaymentFlow(base({ ...handlers, verify: async () => 'pending' }).options);
+  await runPaymentFlow(
+    base({ ...handlers, present: async () => Promise.reject(new Error('x')), isCancelled: () => true }).options
+  );
+
+  assert.deepEqual(seen, [
+    ['success', 1],
+    ['error', 'E_PAYMENT_FAILED'],
+    ['error', 'E_TIMEOUT'],
+    ['cancel'],
+  ]);
+});
+
+test('with onError, thrown errors resolve failed instead of rejecting', async () => {
+  const errors = [];
+  const { options } = base({
+    initiate: async () => Promise.reject(new Error('server down')),
+    onError: (error) => errors.push(error.message),
+  });
+  const result = await runPaymentFlow(options);
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.error.message, 'server down');
+  assert.deepEqual(errors, ['server down']);
+});
+
+test('verify is optional when present reports the result', async () => {
+  const ok = base({ verify: undefined, present: async () => 'success' });
+  assert.equal((await runPaymentFlow(ok.options)).outcome, 'success');
+  assert.ok(!ok.calls.includes('verify'));
+
+  const pending = base({ verify: undefined, present: async () => 'pending' });
+  assert.equal((await runPaymentFlow(pending.options)).outcome, 'timeout');
+});
+
+test('without verify and without a reported result it raises E_NO_VERIFY', async () => {
+  const { options } = base({ verify: undefined, present: async () => undefined });
+  await assert.rejects(runPaymentFlow(options), { code: 'E_NO_VERIFY' });
+});

@@ -12,6 +12,8 @@ export const PaymentFlowErrorCode = {
   Timeout: 'E_TIMEOUT',
   Aborted: 'E_ABORTED',
   VerifyFailed: 'E_VERIFY_FAILED',
+  PaymentFailed: 'E_PAYMENT_FAILED',
+  NoVerify: 'E_NO_VERIFY',
 } as const;
 
 export type PaymentFlowErrorCodeValue = (typeof PaymentFlowErrorCode)[keyof typeof PaymentFlowErrorCode];
@@ -73,75 +75,134 @@ export async function pollPaymentState(
   }
 }
 
-/** The three steps every payment provider needs, plus optional tuning. */
+const isPaymentState = (value: unknown): value is PaymentState =>
+  value === 'success' || value === 'failed' || value === 'pending';
+
+/** The three steps every payment provider needs, the callbacks, and optional tuning. */
 export interface PaymentFlowOptions<TInitiation> extends PollOptions {
   /** Step 1. Ask **your server** to create the payment and return what the gateway needs. */
   initiate: () => Promise<TInitiation>;
-  /** Step 2. Hand the initiated payment to the gateway (open its SDK, app or page). */
+  /**
+   * Step 2. Hand the initiated payment to the gateway (open its SDK, app or page). It may return a
+   * `PaymentState` when the gateway reports the result itself; that is used only if `verify` is not given.
+   */
   present: (initiation: TInitiation) => Promise<unknown>;
-  /** Step 3. Ask **your server** whether the payment finished. It must consult the gateway. */
-  verify: () => Promise<PaymentState>;
+  /**
+   * Step 3. Ask **your server** whether the payment finished; it must consult the gateway. Leave it
+   * out only when the gateway's own SDK reports a trustworthy result (the flow then uses what
+   * `present` returned and raises `E_NO_VERIFY` if that was not a `PaymentState`).
+   */
+  verify?: () => Promise<PaymentState>;
   /** Marks an error from `present` as "the user backed out" so the flow ends `cancelled`. */
   isCancelled?: (error: unknown) => boolean;
   /** Consecutive `verify` failures tolerated before giving up. Defaults to 3. */
   maxVerifyErrors?: number;
   /** Called on every step change. */
   onStatus?: (status: PaymentStatus) => void;
+  /** Called once when the payment succeeded. */
+  onSuccess?: (initiation: TInitiation) => void;
+  /** Called once when the user backed out or stopped waiting. */
+  onCancel?: (initiation?: TInitiation) => void;
+  /**
+   * Called once when the payment failed or timed out (with a `PaymentFlowError`), or when a step
+   * threw (with that error). When it is given, thrown errors no longer reject: the flow resolves
+   * `failed` with the error in `result.error`.
+   */
+  onError?: (error: unknown, initiation?: TInitiation) => void;
 }
 
 export interface PaymentFlowResult<TInitiation> {
   outcome: PaymentOutcome;
   /** What `initiate` returned, when it got that far. */
   initiation?: TInitiation;
+  /** The error behind a `failed` or `timeout` outcome, when there is one. */
+  error?: unknown;
 }
 
 /**
- * Runs initiate, present and verify in order and reports how it ended. A cancelled `present`
- * resolves `cancelled`; a payment that never settles resolves `timeout`; a server-reported failure
- * resolves `failed`. Other errors from `initiate` or `present` reject, and `verify` errors reject
- * only after `maxVerifyErrors` consecutive failures.
+ * Runs initiate, present and verify in order and reports how it ended, calling `onSuccess`,
+ * `onCancel` or `onError` exactly once. A cancelled `present` resolves `cancelled`; a payment that
+ * never settles resolves `timeout`; a server-reported failure resolves `failed`. Errors thrown by a
+ * step reject, unless `onError` is given. `verify` errors count only after `maxVerifyErrors`
+ * consecutive failures.
  */
 export async function runPaymentFlow<TInitiation>(
   options: PaymentFlowOptions<TInitiation>
 ): Promise<PaymentFlowResult<TInitiation>> {
   const report = (status: PaymentStatus) => options.onStatus?.(status);
-  const finish = (outcome: PaymentOutcome, initiation?: TInitiation): PaymentFlowResult<TInitiation> => {
-    report(outcome);
-    return { outcome, initiation };
+  let initiation: TInitiation | undefined;
+
+  const execute = async (): Promise<PaymentFlowResult<TInitiation>> => {
+    report('initiating');
+    initiation = await options.initiate();
+
+    report('presenting');
+    let presented: unknown;
+    try {
+      presented = await options.present(initiation);
+    } catch (error) {
+      if (options.isCancelled?.(error)) return { outcome: 'cancelled', initiation };
+      throw error;
+    }
+
+    if (!options.verify) {
+      if (!isPaymentState(presented)) {
+        throw new PaymentFlowError(
+          PaymentFlowErrorCode.NoVerify,
+          'No `verify` was given and the gateway did not report a result.'
+        );
+      }
+      return { outcome: presented === 'pending' ? 'timeout' : presented, initiation };
+    }
+
+    report('verifying');
+    const verify = options.verify;
+    const limit = options.maxVerifyErrors ?? 3;
+    let failures = 0;
+
+    try {
+      const state = await pollPaymentState(async () => {
+        try {
+          const next = await verify();
+          failures = 0;
+          return next;
+        } catch (error) {
+          failures += 1;
+          if (failures >= limit) throw error;
+          return 'pending';
+        }
+      }, options);
+      return { outcome: state, initiation };
+    } catch (error) {
+      if (error instanceof PaymentFlowError) {
+        return { outcome: error.code === PaymentFlowErrorCode.Timeout ? 'timeout' : 'cancelled', initiation };
+      }
+      throw error;
+    }
   };
 
-  report('initiating');
-  const initiation = await options.initiate();
-
-  report('presenting');
+  let result: PaymentFlowResult<TInitiation>;
   try {
-    await options.present(initiation);
+    result = await execute();
   } catch (error) {
-    if (options.isCancelled?.(error)) return finish('cancelled', initiation);
-    throw error;
+    if (!options.onError) throw error;
+    result = { outcome: 'failed', initiation, error };
   }
 
-  report('verifying');
-  const limit = options.maxVerifyErrors ?? 3;
-  let failures = 0;
-
-  try {
-    const state = await pollPaymentState(async () => {
-      try {
-        const next = await options.verify();
-        failures = 0;
-        return next;
-      } catch (error) {
-        failures += 1;
-        if (failures >= limit) throw error;
-        return 'pending';
-      }
-    }, options);
-    return finish(state, initiation);
-  } catch (error) {
-    if (error instanceof PaymentFlowError) {
-      return finish(error.code === PaymentFlowErrorCode.Timeout ? 'timeout' : 'cancelled', initiation);
-    }
-    throw error;
+  report(result.outcome);
+  if (result.outcome === 'success') {
+    options.onSuccess?.(result.initiation as TInitiation);
+  } else if (result.outcome === 'cancelled') {
+    options.onCancel?.(result.initiation);
+  } else if (options.onError) {
+    const error =
+      result.error ??
+      new PaymentFlowError(
+        result.outcome === 'timeout' ? PaymentFlowErrorCode.Timeout : PaymentFlowErrorCode.PaymentFailed,
+        result.outcome === 'timeout' ? 'The payment did not settle in time.' : 'The payment failed.'
+      );
+    options.onError(error, result.initiation);
+    return { ...result, error };
   }
+  return result;
 }
