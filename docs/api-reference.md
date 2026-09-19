@@ -41,9 +41,13 @@ The same as a hook. Returns `{ start, cancel, reset, status, isProcessing, error
 
 Calls `check` every `intervalMs` until it returns `success` or `failed`. Rejects `PaymentFlowError` `E_TIMEOUT` or `E_ABORTED`; errors from `check` propagate.
 
+### Result types
+
+`PaymentFlowResult<T>` is `PaymentSucceeded<T>` (`outcome: 'success'`, `initiation: T`) | `PaymentCancelled<T>` (`'cancelled'`) | `PaymentFailed<T>` (`'failed'`, `error`) | `PaymentTimedOut<T>` (`'timeout'`, `error`). `initiation` is optional except on success, because a flow can end before `initiate` returns; `error` is always present on `failed` and `timeout`.
+
 ### `PaymentFlowError`
 
-`code` is `E_TIMEOUT`, `E_ABORTED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED` or `E_NO_VERIFY`.
+`code` is `E_INITIATE_FAILED`, `E_PRESENT_FAILED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED`, `E_TIMEOUT`, `E_ABORTED` or `E_NO_VERIFY`. `step` is `'initiate' | 'present' | 'verify' | null` and `cause` is the original error. Also exported: `isPaymentFlowError(value)` and `toPaymentFlowError(error, code, step?)`.
 
 ```ts
 import KhaltiDefault, { pay, cancel, isAvailable, KhaltiError, KhaltiErrorCode } from '@klixsoft/react-native-khalti';

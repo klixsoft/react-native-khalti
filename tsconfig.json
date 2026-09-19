@@ -5,8 +5,13 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["src"]
+  "include": ["src", "typecheck"]
 }

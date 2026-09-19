@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { runPaymentFlow } from './flow';
-import type { PaymentFlowOptions, PaymentFlowResult, PaymentStatus } from './flow';
+import { PaymentFlowErrorCode, runPaymentFlow, toPaymentFlowError } from './flow';
+import type { PaymentFlowError, PaymentFlowOptions, PaymentFlowResult, PaymentStatus } from './flow';
 
 export interface UsePaymentFlowResult<TInitiation> {
-  /** Runs the flow. Resolves with the result, or `undefined` when it failed (see `error`). */
+  /** Runs the flow. Resolves with the result, or `undefined` when a flow is already running or it threw (see `error`). */
   start: () => Promise<PaymentFlowResult<TInitiation> | undefined>;
   /** Stops waiting for the payment. The flow ends `cancelled`. */
   cancel: () => void;
@@ -13,8 +13,8 @@ export interface UsePaymentFlowResult<TInitiation> {
   status: PaymentStatus;
   /** True while a flow is running. */
   isProcessing: boolean;
-  /** The error that ended the flow, if any. */
-  error: unknown;
+  /** The error behind a `failed` or `timeout` outcome, or `null`. */
+  error: PaymentFlowError | null;
 }
 
 /**
@@ -25,7 +25,7 @@ export function usePaymentFlow<TInitiation>(
   options: PaymentFlowOptions<TInitiation>
 ): UsePaymentFlowResult<TInitiation> {
   const [status, setStatus] = useState<PaymentStatus>('idle');
-  const [error, setError] = useState<unknown>(null);
+  const [error, setError] = useState<PaymentFlowError | null>(null);
   const latest = useRef(options);
   const signal = useRef<{ aborted: boolean } | null>(null);
   const mounted = useRef(true);
@@ -57,11 +57,11 @@ export function usePaymentFlow<TInitiation>(
           latest.current.onStatus?.(next);
         },
       });
-      if (result.error && mounted.current) setError(result.error);
+      if ('error' in result && mounted.current) setError(result.error);
       return result;
     } catch (caught) {
       if (mounted.current) {
-        setError(caught);
+        setError(toPaymentFlowError(caught, PaymentFlowErrorCode.PresentFailed));
         setStatus('failed');
       }
       return undefined;

@@ -1,3 +1,6 @@
+import { isPaymentFlowError } from './flow';
+import type { PaymentFlowError } from './flow';
+
 /** Stable, machine readable error codes. Match on these, never on `message`. */
 export const KhaltiErrorCode = {
   /** The user closed the checkout before finishing. Not a failure. */
@@ -22,11 +25,11 @@ export const KhaltiErrorCode = {
 export type KhaltiErrorCodeValue = (typeof KhaltiErrorCode)[keyof typeof KhaltiErrorCode];
 
 export class KhaltiError extends Error {
+  override readonly name = 'KhaltiError';
   readonly code: KhaltiErrorCodeValue;
 
   constructor(code: KhaltiErrorCodeValue, message: string) {
     super(message);
-    this.name = 'KhaltiError';
     this.code = code;
   }
 
@@ -47,4 +50,17 @@ export function toKhaltiError(error: unknown): KhaltiError {
   const code = typeof candidate?.code === 'string' && KNOWN_CODES.has(candidate.code) ? candidate.code : KhaltiErrorCode.Unknown;
 
   return new KhaltiError(code as KhaltiErrorCodeValue, message);
+}
+
+/** Type guard for {@link KhaltiError}. */
+export function isKhaltiError(error: unknown): error is KhaltiError {
+  return error instanceof KhaltiError;
+}
+
+/**
+ * The Khalti error behind a flow error, when the failure came from the Khalti step (its `cause`).
+ * Use it to branch on Khalti-specific `code`s after `runPaymentFlow`, `use...Payment` or `onError`.
+ */
+export function getKhaltiError(error: PaymentFlowError | null | undefined): KhaltiError | undefined {
+  return isPaymentFlowError(error) && error.cause instanceof KhaltiError ? error.cause : undefined;
 }

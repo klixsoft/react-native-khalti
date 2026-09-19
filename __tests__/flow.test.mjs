@@ -135,3 +135,47 @@ test('without verify and without a reported result it raises E_NO_VERIFY', async
   const { options } = base({ verify: undefined, present: async () => undefined });
   await assert.rejects(runPaymentFlow(options), { code: 'E_NO_VERIFY' });
 });
+
+test('errors are PaymentFlowError with a step and the original cause', async () => {
+  const original = new Error('server down');
+  const initiate = await runPaymentFlow(
+    base({ initiate: async () => Promise.reject(original) }).options
+  ).catch((e) => e);
+  assert.equal(initiate.name, 'PaymentFlowError');
+  assert.equal(initiate.code, 'E_INITIATE_FAILED');
+  assert.equal(initiate.step, 'initiate');
+  assert.equal(initiate.cause, original);
+  assert.equal(initiate.message, 'server down');
+
+  const present = await runPaymentFlow(
+    base({ present: async () => Promise.reject(original) }).options
+  ).catch((e) => e);
+  assert.equal(present.code, 'E_PRESENT_FAILED');
+  assert.equal(present.step, 'present');
+
+  const verify = await runPaymentFlow(
+    base({ verify: async () => Promise.reject(original), maxVerifyErrors: 1 }).options
+  ).catch((e) => e);
+  assert.equal(verify.code, 'E_VERIFY_FAILED');
+  assert.equal(verify.step, 'verify');
+  assert.equal(verify.cause, original);
+});
+
+test('failed and timeout results always carry an error', async () => {
+  const failed = await runPaymentFlow(base({ verify: async () => 'failed' }).options);
+  assert.equal(failed.outcome, 'failed');
+  assert.equal(failed.error.code, 'E_PAYMENT_FAILED');
+
+  const timeout = await runPaymentFlow(base({ verify: async () => 'pending' }).options);
+  assert.equal(timeout.outcome, 'timeout');
+  assert.equal(timeout.error.code, 'E_TIMEOUT');
+
+  const ok = await runPaymentFlow(base().options);
+  assert.equal('error' in ok, false);
+});
+
+test('an abort is reported through isCancelled', async () => {
+  const { PaymentFlowError } = await import('../src/flow.ts');
+  assert.equal(new PaymentFlowError('E_ABORTED', 'x').isCancelled, true);
+  assert.equal(new PaymentFlowError('E_TIMEOUT', 'x').isCancelled, false);
+});

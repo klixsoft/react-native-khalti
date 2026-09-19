@@ -136,7 +136,7 @@ processKhaltiPayment({
 });
 ```
 
-Each callback is called at most once per payment. `onError` receives a `PaymentFlowError` (`E_PAYMENT_FAILED` or `E_TIMEOUT`) when the server reports a failure or the payment never settles, or the original error when a step throws.
+Each callback is called at most once per payment. `onError` always receives a `PaymentFlowError`: `E_PAYMENT_FAILED` or `E_TIMEOUT` when the server reports a failure or the payment never settles, or a wrapped error (`step` and `cause` set) when a step throws.
 
 ### Low level
 
@@ -207,7 +207,50 @@ Full signatures and options are in the [API reference](docs/api-reference.md).
 
 ## Errors
 
-`KhaltiError.code` is one of `E_CANCELLED`, `E_NETWORK`, `E_LOOKUP_FAILED`, `E_RETURN_URL`, `E_IN_PROGRESS`, `E_NO_PRESENTER`, `E_INVALID_ARGUMENTS`, `E_NOT_LINKED`, `E_UNKNOWN`. `error.isCancelled` is true for `E_CANCELLED`. The generic flow raises `PaymentFlowError` with `E_TIMEOUT`, `E_ABORTED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED` or `E_NO_VERIFY`.
+`KhaltiError.code` is one of `E_CANCELLED`, `E_NETWORK`, `E_LOOKUP_FAILED`, `E_RETURN_URL`, `E_IN_PROGRESS`, `E_NO_PRESENTER`, `E_INVALID_ARGUMENTS`, `E_NOT_LINKED`, `E_UNKNOWN`. `error.isCancelled` is true for `E_CANCELLED`. The generic flow raises `PaymentFlowError` with `E_INITIATE_FAILED`, `E_PRESENT_FAILED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED`, `E_TIMEOUT`, `E_ABORTED` or `E_NO_VERIFY`.
+
+### Typed results and errors
+
+Everything is typed end to end. A flow result is a discriminated union on `outcome`, so TypeScript only lets you read what exists:
+
+```ts
+const result = await processKhaltiPayment({ initiate, verify });
+
+switch (result.outcome) {
+  case 'success':
+    result.initiation;
+    break;
+  case 'failed':
+  case 'timeout':
+    result.error.code;
+    break;
+  case 'cancelled':
+    break;
+}
+```
+
+There is one error model. Every failure is a `PaymentFlowError` with:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `code` | `PaymentFlowErrorCodeValue` | Stable code: `E_INITIATE_FAILED`, `E_PRESENT_FAILED`, `E_VERIFY_FAILED`, `E_PAYMENT_FAILED`, `E_TIMEOUT`, `E_ABORTED`, `E_NO_VERIFY`. |
+| `step` | `'initiate' \| 'present' \| 'verify' \| null` | Where in the flow it happened. |
+| `cause` | `unknown` | The original error, for example your API's error or a `KhaltiError`. |
+| `isCancelled` | `boolean` | True for `E_ABORTED`. |
+
+To handle Khalti-specific errors, read the cause with the typed helper:
+
+```ts
+import { getKhaltiError, PaymentFlowErrorCode } from '@klixsoft/react-native-khalti';
+
+onError: (error) => {
+  const khaltiError = getKhaltiError(error);
+  if (khaltiError?.isCancelled) return;
+  if (error.code === PaymentFlowErrorCode.InitiateFailed) showToast('Could not start the payment');
+}
+```
+
+`isKhaltiError(value)` and `isPaymentFlowError(value)` are type guards for values of unknown type.
 
 ## Security
 
