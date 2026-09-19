@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.0] - Unreleased
 
 ### Added
+- `processKhaltiPayment`, `useKhaltiPayment` and `createKhaltiFlow`: `initiate`, open the Khalti checkout, `verify`.
+- Standard payment lifecycle shared by all Klixsoft payment packages: `runPaymentFlow`,
+  `usePaymentFlow`, `pollPaymentState` and the `PaymentState` / `PaymentOutcome` / `PaymentStatus` types.
 - `pay()` opens the official Khalti Checkout (KPG-2) for a payment initiated on your server and
   resolves with a typed result.
 - `cancel()` and `isAvailable()`.

@@ -1,5 +1,47 @@
 # API reference
 
+## `processKhaltiPayment(options)` / `useKhaltiPayment(options)` / `createKhaltiFlow(options)`
+
+The standard entry points: `initiate` returns a `KhaltiPayOptions` (`publicKey`, `pidx`, `paymentUrl?`, `environment?`, `openInKhalti?`), the official Khalti checkout is opened, then `verify` is polled. Accepts every generic option below except `present` and `isCancelled`. `processKhaltiPayment` resolves `{ outcome, initiation }`, `useKhaltiPayment` returns the hook result, and `createKhaltiFlow` returns the options object for `runPaymentFlow` / `usePaymentFlow`.
+
+## Generic payment flow
+
+Exported by every Klixsoft payment package with identical behaviour.
+
+```ts
+type PaymentState = 'success' | 'failed' | 'pending';
+type PaymentOutcome = 'success' | 'failed' | 'cancelled' | 'timeout';
+type PaymentStatus = 'idle' | 'initiating' | 'presenting' | 'verifying' | PaymentOutcome;
+```
+
+### `runPaymentFlow(options): Promise<{ outcome, initiation? }>`
+
+| Option | Type | Notes |
+| --- | --- | --- |
+| `initiate` | `() => Promise<T>` | Ask your server to create the payment. |
+| `present` | `(initiation: T) => Promise<unknown>` | Hand it to the gateway. |
+| `verify` | `() => Promise<PaymentState>` | Ask your server for the real state. |
+| `isCancelled` | `(error) => boolean` | Marks a `present` error as "user backed out" so the flow ends `cancelled`. |
+| `intervalMs` | `number` | Poll delay. Default 3000. |
+| `timeoutMs` | `number` | Give up waiting after this long. Default 120000. |
+| `maxVerifyErrors` | `number` | Consecutive `verify` failures before the flow rejects. Default 3. |
+| `signal` | `{ aborted: boolean }` | Set `aborted = true` to stop; the flow ends `cancelled`. |
+| `onStatus` | `(status) => void` | Called on every step change. |
+
+Errors from `initiate` and non-cancel errors from `present` reject. A server `failed` resolves `failed`; a payment still pending at `timeoutMs` resolves `timeout`.
+
+### `usePaymentFlow(options)`
+
+The same as a hook. Returns `{ start, cancel, reset, status, isProcessing, error }`. `start()` resolves with the result, or `undefined` if it failed (see `error`). The latest options are always used and a running flow is aborted on unmount.
+
+### `pollPaymentState(check, options?)`
+
+Calls `check` every `intervalMs` until it returns `success` or `failed`. Rejects `PaymentFlowError` `E_TIMEOUT` or `E_ABORTED`; errors from `check` propagate.
+
+### `PaymentFlowError`
+
+`code` is `E_TIMEOUT`, `E_ABORTED` or `E_VERIFY_FAILED`.
+
 ```ts
 import KhaltiDefault, { pay, cancel, isAvailable, KhaltiError, KhaltiErrorCode } from '@klixsoft/react-native-khalti';
 ```

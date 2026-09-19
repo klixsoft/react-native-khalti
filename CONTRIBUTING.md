@@ -33,3 +33,33 @@ app (a workspace link or `pnpm link`) and rebuild:
 
 Do not open a public issue for a security problem. Email the maintainers privately through the
 contact on the GitHub organisation page.
+
+## Releasing
+
+Releases are cut by maintainers and published to npm automatically from a git tag.
+
+1. Make sure `main` is green and `CHANGELOG.md` has the release notes under the new version heading.
+2. Bump the version. This edits `package.json`, commits and creates the tag `vX.Y.Z`:
+
+   ```sh
+   npm version patch   # or minor / major, or e.g. 0.2.0-beta.1 for a pre-release
+   ```
+
+3. Push the commit and the tag:
+
+   ```sh
+   git push --follow-tags
+   ```
+
+4. The **Release** workflow checks that the tag matches `package.json`, runs typecheck and tests,
+   publishes to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) and
+   creates the GitHub release. Versions with a suffix (for example `-beta.1`) are published under the
+   `next` dist-tag and marked as pre-releases; everything else goes to `latest`.
+
+Repository setup (once): add an npm automation token as the `NPM_TOKEN` Actions secret, and make sure
+the `@klixsoft` scope exists on npm and the token can publish to it.
+
+### Versioning
+
+[Semantic Versioning](https://semver.org): patch for fixes, minor for backwards compatible features,
+major for breaking changes. While the version is `0.x`, minor releases may include breaking changes.

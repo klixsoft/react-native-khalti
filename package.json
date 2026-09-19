@@ -28,7 +28,9 @@
     "turbomodule"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import ./__tests__/register.mjs --test __tests__/",
+    "prepublishOnly": "pnpm typecheck && pnpm test"
   },
   "repository": {
     "type": "git",
@@ -41,7 +43,8 @@
   "author": "Klixsoft",
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "peerDependencies": {
     "react": "*",
@@ -54,5 +57,16 @@
     "android": {
       "javaPackageName": "com.klixsoft.khalti"
     }
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@react-native/typescript-config": "0.87.1",
+    "@types/react": "^19.2.18",
+    "react": "19.2.8",
+    "react-native": "0.87.1",
+    "typescript": "^5.9.3"
   }
 }
