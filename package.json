@@ -30,7 +30,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import ./__tests__/register.mjs --test __tests__/",
+    "test": "node --import ./__tests__/register.mjs --test \"__tests__/*.test.mjs\"",
     "prepublishOnly": "pnpm typecheck && pnpm test"
   },
   "repository": {
