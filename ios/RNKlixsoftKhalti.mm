@@ -1,10 +1,14 @@
 #import "RNKlixsoftKhalti.h"
+#import <RNKlixsoftKhaltiSpec/RNKlixsoftKhaltiSpec.h>
 
 #if __has_include("RNKlixsoftKhalti/RNKlixsoftKhalti-Swift.h")
 #import "RNKlixsoftKhalti/RNKlixsoftKhalti-Swift.h"
 #else
 #import "RNKlixsoftKhalti-Swift.h"
 #endif
+
+@interface RNKlixsoftKhalti () <NativeKhaltiSpec>
+@end
 
 @implementation RNKlixsoftKhalti {
   KlixsoftKhaltiBridge *_bridge;
@@ -35,7 +39,7 @@ RCT_EXPORT_MODULE(KlixsoftKhalti)
 {
   [_bridge payWithPublicKey:publicKey
                        pidx:pidx
-                 paymentUrl:paymentUrl
+               openInKhalti:openInKhalti
                 environment:environment
                  completion:^(NSDictionary *result, NSString *errorCode, NSString *errorMessage) {
                    if (errorCode != nil) {

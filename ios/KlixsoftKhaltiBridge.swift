@@ -15,11 +15,11 @@ public final class KlixsoftKhaltiBridge: NSObject {
   private var completion: Completion?
   private var verificationRequested = false
 
-  @objc(payWithPublicKey:pidx:paymentUrl:environment:completion:)
+  @objc(payWithPublicKey:pidx:openInKhalti:environment:completion:)
   public func pay(
     publicKey: String,
     pidx: String,
-    paymentUrl: String,
+    openInKhalti: Bool,
     environment: String,
     completion: @escaping Completion
   ) {
@@ -43,7 +43,7 @@ public final class KlixsoftKhaltiBridge: NSObject {
       let config = KhaltiPayConfig(
         publicKey: publicKey,
         pIdx: pidx,
-        paymentUrl: paymentUrl,
+        openInKhalti: openInKhalti,
         environment: environment.lowercased() == "production" ? .PROD : .TEST
       )
 

@@ -1,4 +1,4 @@
-#import <RNKlixsoftKhaltiSpec/RNKlixsoftKhaltiSpec.h>
+#import <Foundation/Foundation.h>
 
-@interface RNKlixsoftKhalti : NSObject <NativeKhaltiSpec>
+@interface RNKlixsoftKhalti : NSObject
 @end
