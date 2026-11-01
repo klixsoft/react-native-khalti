@@ -64,7 +64,7 @@
     "node": ">=22"
   },
   "devDependencies": {
-    "@react-native/typescript-config": "0.87.1",
+    "@react-native/typescript-config": "0.88.1",
     "@types/react": "^19.2.18",
     "react": "19.2.8",
     "react-native": "0.87.1",
