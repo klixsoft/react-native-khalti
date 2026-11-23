@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.0-beta.3] - 2026-11-23
+
+### Fixed
+- iOS: Pass `openInKhalti` instead of the unsupported `paymentUrl` argument to `KhaltiPayConfig` in `KlixsoftKhaltiBridge.swift`.
+- iOS: Move the C++-only `RNKlixsoftKhaltiSpec.h` import and `<NativeKhaltiSpec>` conformance out of `RNKlixsoftKhalti.h` into `RNKlixsoftKhalti.mm` so dynamic framework (`use_frameworks! :linkage => :dynamic`) builds compile cleanly with Swift.
+- iOS: Capture the active `Khalti` instance before clearing `khalti = nil` in `handlePaymentResult`.
+
 ## [0.1.0-beta.2] - 2026-09-19
 
 ### Documentation
