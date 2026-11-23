@@ -70,9 +70,10 @@ public final class KlixsoftKhaltiBridge: NSObject {
 
   private func handlePaymentResult(_ result: PaymentResult, _ instance: Khalti?) {
     let done = completion
+    let active = instance ?? khalti
     completion = nil
     khalti = nil
-    (instance ?? khalti)?.close()
+    active?.close()
     done?(Self.dictionary(from: result), nil, nil)
   }
 
